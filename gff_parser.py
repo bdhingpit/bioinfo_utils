@@ -165,11 +165,15 @@ def add_prod_name_to_id(args):
 	new_col9_ser = new_col9_ser.str.replace(';None*', '', regex=True)
 
 	#Apply new col9 to GFF file
-	gff_df[8] = new_col9_ser.to_frame(name=8)
+	merged_df[8] = new_col9_ser.to_frame(name=8)
 
-	print(gff_df)
+	#Drop the cols past the ATTRIBUTE cols (col9)
+	merged_df.drop(columns=[9,10,11], inplace=True)
+
+	print(merged_df)
+
 	#Save file
-	gff_df.to_csv(args.output_prefix+'_ID_w_PROD_NAME.gff', sep='\t', header=False, index=False)
+	merged_df.to_csv(args.output_prefix+'_ID_w_PROD_NAME.gff', sep='\t', header=False, index=False)
 	return gff_df
 
 
