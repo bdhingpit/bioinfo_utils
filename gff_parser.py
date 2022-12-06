@@ -109,13 +109,10 @@ def check_prod_name(args):
 	attr_and_prod_name_df.to_csv(args.output_prefix+'_ATTR_AND_PROD_NAME.tsv', sep='\t', header=False, index=False)
 	return merged_df
 
-#Removes spaces in col2 of GFF file; Converts the -1, 1 in col7 to - and +, respectively
-def parse_col2_and_7(args):
+#Converts the -1, 1 in col7 to - and +, respectively
+def parse_col7(args):
 	#load gff file
 	gff_df = load_gff(args.gff_file)
-
-	#Replace all non-alphanuemrical in col2 by nothing
-	gff_df[1] = gff_df[1].str.replace('/[^[:alnum:]]/', '', regex=True)
 
 	#in col7, if -1 replace by -, if +1, replace by +, if neither, replace by .
 	gff_df.loc[gff_df[6] == -1, 6] = '-'
@@ -153,13 +150,16 @@ def add_prod_name_to_id(args):
 	splt_col9_df = merged_df[8].str.split(';', expand=True)
 
 	#Create a new ID string (merged_df[10] is the LOCUS_TAG and merged_df[11] is the PRODUCT_NAME)
-	new_id_field_ser = 'ID=' + merged_df[10] + '_' + merged_df[11]
+	new_id_field_ser = 'Name=' + merged_df[10] + '_' + merged_df[11]
 
 	#Replace the orig ID string by the new ID string
 	splt_col9_df[0] = new_id_field_ser.to_frame(name=0)
 
 	#Rejoin together col9 
 	new_col9_ser = splt_col9_df.apply(lambda x: ';'.join(x.values.astype(str)), axis=1)
+
+	#Remove quotation marks in some of the col9 rows
+	new_col9_ser = new_col9_ser.map(lambda x: x.lstrip('"').rstrip('"'))
 
 	#Cleanup; remove ";None*" at the end part of the entire col9 string
 	new_col9_ser = new_col9_ser.str.replace(';None*', '', regex=True)
@@ -182,7 +182,7 @@ def add_prod_name_to_id(args):
 #
 # MAIN
 #
-#####
+######
 
 def main():
 	#Argument parser
@@ -209,10 +209,10 @@ def main():
 	parser_fxn2.set_defaults(func=check_prod_name)
 
 	#3rd subcommand
-	parser_fxn3 = subparsers.add_parser('parse_col2_and_7', help='Removes non-alphanumerical characters in 2nd column; Changes -1 and +1 in 7th column to - and +, respectively')
+	parser_fxn3 = subparsers.add_parser('parse_col7', help='Changes -1 and +1 in 7th column to - and +, respectively')
 	parser_fxn3.add_argument('gff_file', help='Path to GFF file')
 	parser_fxn3.add_argument('output_prefix', help='Prefix of the output reformatted GFF file')
-	parser_fxn3.set_defaults(func=parse_col2_and_7)
+	parser_fxn3.set_defaults(func=parse_col7)
 
 	#4th subcommand
 	parser_fxn4 = subparsers.add_parser('add_prod_name_to_id', help='Adds the PRODUCT_NAME to the ID field in the 9th column of the GFF file')
