@@ -187,7 +187,7 @@ def add_prod_name_to_id(args):
 def main():
 	#Argument parser
 	parser = argparse.ArgumentParser(
-		prog='GFF_File_Parser',
+		prog='gff_parser.py',
 		description='Perform different processes to GFF files'
 		)
 
