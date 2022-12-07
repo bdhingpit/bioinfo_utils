@@ -122,7 +122,7 @@ def parse_col7(args):
 	print(gff_df)
 
 	#Save file
-	gff_df.to_csv(args.output_prefix+'_MOD_2_AND_7_COL.gff', sep='\t', header=False, index=False)
+	gff_df.to_csv(args.output_prefix+'_PARSE_COL7.gff', sep='\t', header=False, index=False)
 	return gff_df
 
 
