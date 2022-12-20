@@ -288,7 +288,7 @@ def main():
 	#5th subcommand
 	parser_fxn5 = subparsers.add_parser('add_attribute', help='Add ATTRIBUTES to col9 given a map of LOCUS_TAG to ATTRIBUTE_VALUE')
 	parser_fxn5.add_argument('gff_file', help='Path to GFF file')
-	parser_fxn5.add_argument('name_attr_map_file', help='A TSV file containing the LOCUS_TAG in the first column and the ATTRIBUTE_VALUE in the second column')
+	parser_fxn5.add_argument('locus_attr_map_file', help='A TSV file containing the LOCUS_TAG in the first column and the ATTRIBUTE_VALUE in the second column')
 	parser_fxn5.add_argument('attr_class', help='Name of attribute class (e.g. ')
 	parser_fxn5.add_argument('output_prefix', help='Prefix of the output reformatted GFF file')
 	parser_fxn5.set_defaults(func=add_attribute)
