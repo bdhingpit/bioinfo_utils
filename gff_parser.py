@@ -12,6 +12,8 @@ import sys
 import argparse
 import pandas as pd
 
+pd.set_option('display.max_colwidth', None)
+pd.set_option('display.max_columns', None)
 
 ###################################
 #
@@ -177,6 +179,68 @@ def add_prod_name_to_id(args):
 	return gff_df
 
 
+#Adds an attribute to col9 of GFF file
+def add_attribute(args):
+	gff_df = load_gff(args.gff_file)
+	name_attr_map_df = pd.read_csv(args.name_attr_map_file, sep='\t', header=None)
+
+	#Aggregate ATTR_VALUE based on same GENE_IDS
+	new_name_attr_map_df = name_attr_map_df[[0, 1]].drop_duplicates().reset_index(drop=True)
+	new_name_attr_map_df[1] = new_name_attr_map_df.groupby([0])[1].transform(lambda x: ','.join(x))
+	new_name_attr_map_df.drop_duplicates(inplace=True)
+
+	new_name_attr_map_df.to_csv('check2.tsv', sep='\t')
+
+	#Get LOCUS_TAGS
+	loc_tags = get_gff_loc_tags(gff_df) #get the LOCUS_TAG ATTRIBUTE
+	gff_w_loc_tags = pd.concat([gff_df, loc_tags.to_frame(name='loc_tags')], axis=1) #concat to the orig GFF the LOCUS_TAGs
+
+	#merge GFF and ATTR map file file based on LOCUS_TAGs
+	merged_df = gff_w_loc_tags.merge(new_name_attr_map_df, left_on='loc_tags', right_on=0, how='left').iloc[:, 0:12]
+	merged_df.columns = list(range(len(merged_df.columns)))
+
+	#Add ATTR_CLASS to col9 where applicable
+	idx_with_match = merged_df[10][~merged_df[10].isnull()].index.tolist() #Get all index in GFF file with a match in the map file
+	idx_wo_attr_class = merged_df[8][~merged_df[8].str.contains(args.attr_class)].index.tolist() #Get all index in GFF col9 without the ATTR_CLASS yet
+	
+	intersect = list(set(idx_wo_attr_class) & set(idx_with_match)) #Get the intersection of the 2 lists above
+	intersect.sort() #Sort the list
+
+	merged_df.iloc[intersect, 8] = merged_df.iloc[intersect, 8] + args.attr_class + '=' #Add the ATTR_CLASS to the rows without the ATTR_CLASS yet
+
+	#Split the rows of interest in col9 into different ATTR
+	splt_df = merged_df.iloc[idx_with_match, 8].str.split(';', expand=True)
+
+	#concat the ATTR_VAL and splt_df
+	splt_df = pd.concat([splt_df, merged_df.iloc[idx_with_match, -1]], axis=1)
+	splt_df.columns = list(range(len(splt_df.columns)))
+
+	#Merge column containing ATTR_CLASS and ATTR_VAL
+	splt_df_bool = splt_df.apply(lambda x: x.astype(str).str.contains(args.attr_class)) #Find where the ATTR_CLASS are
+
+	#attr_class_val_ser = splt_df[splt_df_bool].apply(lambda x: ''.join(x.dropna().astype(str)), axis=1) + splt_df.iloc[:, -1] #Combine ATTR_CLASS and ATTR_VAL resulting to a Series
+	attr_class_val_ser = pd.Series(0, index=idx_with_match)
+	exstng_attr_class = splt_df[splt_df_bool].apply(lambda x: ''.join(x.dropna().astype(str)), axis=1) #Create a Series for the existing and newly-created attr_class
+
+	for i in idx_with_match:
+		if exstng_attr_class[i].endswith('='):
+			attr_class_val_ser[i] = exstng_attr_class[i] + splt_df.loc[i, splt_df.columns[-1]]
+
+		else:
+			attr_class_val_ser[i] = exstng_attr_class[i] + ',' + splt_df.loc[i, splt_df.columns[-1]]
+
+	for i in splt_df.index.tolist():
+		splt_df.loc[i, :].replace(to_replace=r'^{}.*'.format(args.attr_class), regex=True, value=attr_class_val_ser[i], inplace=True) #***DOUBLE CHECK THIS ONE, MIGHT HAVE A BUG WHEN ADDING MORE ATTR_VALS TO THE SAME ATTR_CLASS
+
+	#Rejoin splt_df
+	col9_mod = splt_df.iloc[:, 0:-1].apply(lambda x: ';'.join(x.dropna().astype(str)), axis=1)
+
+	#Replace orig col9 in gff_df by modified col9
+	gff_df.loc[col9_mod.index, 8] = col9_mod
+
+	#Export final gff file
+	gff_df.to_csv(args.output_prefix+'_w_ADDED_ATTR.gff', sep='\t', header=False, index=False)
+	
 
 ######
 #
@@ -220,6 +284,15 @@ def main():
 	parser_fxn4.add_argument('product_name_file', help='Path to *.product_name file')
 	parser_fxn4.add_argument('output_prefix', help='Prefix of the output reformatted GFF file')
 	parser_fxn4.set_defaults(func=add_prod_name_to_id)
+
+	#5th subcommand
+	parser_fxn5 = subparsers.add_parser('add_attribute', help='Add ATTRIBUTES to col9 given a map of LOCUS_TAG to ATTRIBUTE_VALUE')
+	parser_fxn5.add_argument('gff_file', help='Path to GFF file')
+	parser_fxn5.add_argument('name_attr_map_file', help='A TSV file containing the LOCUS_TAG in the first column and the ATTRIBUTE_VALUE in the second column')
+	parser_fxn5.add_argument('attr_class', help='Name of attribute class (e.g. ')
+	parser_fxn5.add_argument('output_prefix', help='Prefix of the output reformatted GFF file')
+	parser_fxn5.set_defaults(func=add_attribute)
+
 
 	args = parser.parse_args()
 	args.func(args)
