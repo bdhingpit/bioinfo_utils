@@ -74,43 +74,6 @@ def is_id_field_set_first(gff_df):
 #
 ##################
 
-#Checks for entries with different ID and LOCUS_TAG
-def compare_id_and_loc_tags(args):
-	#load gff file
-	gff_df = load_gff(args.gff_file)
-
-	#Extract ID and LOCUS_TAGs
-	loc_tags = get_gff_loc_tags(gff_df)
-	ids = get_gff_ids(gff_df)
-
-	#Create a boolean series where they don't match
-	non_match_series = loc_tags != ids
-
-	non_match_attr = pd.concat([loc_tags[non_match_series], ids[non_match_series]], axis=1, keys=("locus_tags", "ids"))
-
-	print(non_match_attr)
-	return non_match_attr
-
-#Check the associated PRODUCT_NAME given an ATTRIBUTE (ID or LOCUS_TAG)
-#This assumes that *.product_name file is formatted as : col1 : [list of ATTR names], col2 : [list of PRODUCT_NAMES]
-def check_prod_name(args):
-	#load needed files
-	prod_names_df = load_prod_name(args.product_name_file)
-	attr_df = pd.read_csv(args.attr_file, sep='\t', header=None)
-
-	#Note: -1 on column numbers since pandas is 0 index
-	merged_df = prod_names_df.merge(attr_df, left_on=(args.left_col_num)-1, right_on=(args.right_col_num)-1, indicator=True)
-
-	#Take only the first col (list of ATTR) and the 2nd col (PRODUCT_NAMES)
-	attr_and_prod_name_df = merged_df.iloc[:, 0:2]
-	attr_and_prod_name_df.columns = list(range(len(attr_and_prod_name_df.columns)))
-
-	print(attr_and_prod_name_df)
-
-	#save file
-	attr_and_prod_name_df.to_csv(args.output_prefix+'_ATTR_AND_PROD_NAME.tsv', sep='\t', header=False, index=False)
-	return merged_df
-
 #Converts the -1, 1 in col7 to - and +, respectively
 def parse_col7(args):
 	#load gff file
@@ -182,14 +145,12 @@ def add_prod_name_to_id(args):
 #Adds an attribute to col9 of GFF file
 def add_attribute(args):
 	gff_df = load_gff(args.gff_file)
-	name_attr_map_df = pd.read_csv(args.name_attr_map_file, sep='\t', header=None)
+	name_attr_map_df = pd.read_csv(args.locus_attr_map_file, sep='\t', header=None)
 
 	#Aggregate ATTR_VALUE based on same GENE_IDS
 	new_name_attr_map_df = name_attr_map_df[[0, 1]].drop_duplicates().reset_index(drop=True)
 	new_name_attr_map_df[1] = new_name_attr_map_df.groupby([0])[1].transform(lambda x: ','.join(x))
 	new_name_attr_map_df.drop_duplicates(inplace=True)
-
-	new_name_attr_map_df.to_csv('check2.tsv', sep='\t')
 
 	#Get LOCUS_TAGS
 	loc_tags = get_gff_loc_tags(gff_df) #get the LOCUS_TAG ATTRIBUTE
@@ -218,13 +179,12 @@ def add_attribute(args):
 	#Merge column containing ATTR_CLASS and ATTR_VAL
 	splt_df_bool = splt_df.apply(lambda x: x.astype(str).str.contains(args.attr_class)) #Find where the ATTR_CLASS are
 
-	#attr_class_val_ser = splt_df[splt_df_bool].apply(lambda x: ''.join(x.dropna().astype(str)), axis=1) + splt_df.iloc[:, -1] #Combine ATTR_CLASS and ATTR_VAL resulting to a Series
-	attr_class_val_ser = pd.Series(0, index=idx_with_match)
+	attr_class_val_ser = pd.Series(0, index=idx_with_match) #Instantiate a series
 	exstng_attr_class = splt_df[splt_df_bool].apply(lambda x: ''.join(x.dropna().astype(str)), axis=1) #Create a Series for the existing and newly-created attr_class
 
 	for i in idx_with_match:
-		if exstng_attr_class[i].endswith('='):
-			attr_class_val_ser[i] = exstng_attr_class[i] + splt_df.loc[i, splt_df.columns[-1]]
+		if exstng_attr_class[i].endswith('{}='.format(args.attr_class)):
+			attr_class_val_ser[i] = exstng_attr_class[i] + splt_df.loc[i, splt_df.columns[-1]] + ';'
 
 		else:
 			attr_class_val_ser[i] = exstng_attr_class[i] + ',' + splt_df.loc[i, splt_df.columns[-1]]
@@ -237,6 +197,8 @@ def add_attribute(args):
 
 	#Replace orig col9 in gff_df by modified col9
 	gff_df.loc[col9_mod.index, 8] = col9_mod
+
+	print(gff_df)
 
 	#Export final gff file
 	gff_df.to_csv(args.output_prefix+'_w_ADDED_ATTR.gff', sep='\t', header=False, index=False)
@@ -258,40 +220,26 @@ def main():
 	subparsers = parser.add_subparsers()
 	subparsers.metavar = 'Sub-commands:'
 
-	#1st subcommand 
-	parser_fxn1 = subparsers.add_parser('compare_id_and_loc_tags', help='Prints the non-matching IDs and LOCUS_TAGs in the 9th column of the GFF file')
+	#1st subcommand
+	parser_fxn1 = subparsers.add_parser('parse_col7', help='Changes -1 and +1 in 7th column to - and +, respectively')
 	parser_fxn1.add_argument('gff_file', help='Path to GFF file')
-	parser_fxn1.set_defaults(func=compare_id_and_loc_tags)
+	parser_fxn1.add_argument('output_prefix', help='Prefix of the output reformatted GFF file')
+	parser_fxn1.set_defaults(func=parse_col7)
 
 	#2nd subcommand
-	parser_fxn2 = subparsers.add_parser('check_prod_name', help='Finds the associated PRODUCT_NAME given an ATTRIBUTE (ID or LOCUS_TAG)')
+	parser_fxn2 = subparsers.add_parser('add_prod_name_to_id', help='Adds the PRODUCT_NAME to the ID field in the 9th column of the GFF file')
+	parser_fxn2.add_argument('gff_file', help='Path to GFF file')
 	parser_fxn2.add_argument('product_name_file', help='Path to *.product_name file')
-	parser_fxn2.add_argument('attr_file', help='Path to a tab-separated file containing the IDs or LOCUS_TAGs that you want find the associated PRODUCT_NAME. File should have no header row')
-	parser_fxn2.add_argument('left_col_num', type=int, help='Column number of the IDs or LOCUS_TAGs in the product_name_file')
-	parser_fxn2.add_argument('right_col_num', type=int, help='Column number of the IDs or LOCUS_TAGs in the attr_file')
 	parser_fxn2.add_argument('output_prefix', help='Prefix of the output reformatted GFF file')
-	parser_fxn2.set_defaults(func=check_prod_name)
+	parser_fxn2.set_defaults(func=add_prod_name_to_id)
 
 	#3rd subcommand
-	parser_fxn3 = subparsers.add_parser('parse_col7', help='Changes -1 and +1 in 7th column to - and +, respectively')
+	parser_fxn3 = subparsers.add_parser('add_attribute', help='Add ATTRIBUTES to col9 given a map of LOCUS_TAG to ATTRIBUTE_VALUE')
 	parser_fxn3.add_argument('gff_file', help='Path to GFF file')
+	parser_fxn3.add_argument('locus_attr_map_file', help='A TSV file containing the LOCUS_TAG in the first column and the ATTRIBUTE_VALUE in the second column')
+	parser_fxn3.add_argument('attr_class', help='Name of attribute class (e.g. ')
 	parser_fxn3.add_argument('output_prefix', help='Prefix of the output reformatted GFF file')
-	parser_fxn3.set_defaults(func=parse_col7)
-
-	#4th subcommand
-	parser_fxn4 = subparsers.add_parser('add_prod_name_to_id', help='Adds the PRODUCT_NAME to the ID field in the 9th column of the GFF file')
-	parser_fxn4.add_argument('gff_file', help='Path to GFF file')
-	parser_fxn4.add_argument('product_name_file', help='Path to *.product_name file')
-	parser_fxn4.add_argument('output_prefix', help='Prefix of the output reformatted GFF file')
-	parser_fxn4.set_defaults(func=add_prod_name_to_id)
-
-	#5th subcommand
-	parser_fxn5 = subparsers.add_parser('add_attribute', help='Add ATTRIBUTES to col9 given a map of LOCUS_TAG to ATTRIBUTE_VALUE')
-	parser_fxn5.add_argument('gff_file', help='Path to GFF file')
-	parser_fxn5.add_argument('locus_attr_map_file', help='A TSV file containing the LOCUS_TAG in the first column and the ATTRIBUTE_VALUE in the second column')
-	parser_fxn5.add_argument('attr_class', help='Name of attribute class (e.g. ')
-	parser_fxn5.add_argument('output_prefix', help='Prefix of the output reformatted GFF file')
-	parser_fxn5.set_defaults(func=add_attribute)
+	parser_fxn3.set_defaults(func=add_attribute)
 
 
 	args = parser.parse_args()
