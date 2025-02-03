@@ -1,238 +1,253 @@
 #!/home/bdhingpit/miniconda3/envs/my_bioinfo_env/bin/python
 
-from chart_studio import plotly as py
+"""
+For practice only.
+
+CLI-based utilty to show visualize quality profile of a FASTQ file (i.e. similar to FastQC).
+"""
+
 import plotly.graph_objects as go
-import plotly.express as px
 import colorlover as cl
 import skbio
-from skbio.sequence import DNA, RNA
+from skbio.sequence import DNA
 import pandas as pd
-import itertools
 import numpy as np
 import argparse
 import time
 from warnings import simplefilter
 
-start_time = time.time()
 
-#Module: per_base_qc_plot
-#Module: fastq_stat
 def define_layout(plot_title, x_title, y_title, y_range, show_legend):
-	layout = go.Layout(
-		title=dict(
-			text=plot_title,
-			x=0.5
-		),
-		template="plotly_white",
-		yaxis=dict(
-			title=y_title,
-			showgrid=True,
-			gridcolor="#d9d4d3",
-			zerolinecolor="#d9d4d3",
-			range=y_range
-		),
-		xaxis=dict(
-			title=x_title,
-		),
-		font=dict(
-			family="Open Sans", 
-			size=16, 
-			color="#2e1c18"
-		),
-		showlegend=show_legend
-	)
+    """
+    Define layout for plot
 
-	return layout
+    Module: per_base_qc_plot
+    Module: fastq_stat
+    """
+    layout = go.Layout(
+        title=dict(text=plot_title, x=0.5),
+        template="plotly_white",
+        yaxis=dict(title=y_title, showgrid=True, gridcolor="#d9d4d3", zerolinecolor="#d9d4d3", range=y_range),
+        xaxis=dict(
+            title=x_title,
+        ),
+        font=dict(family="Open Sans", size=16, color="#2e1c18"),
+        showlegend=show_legend,
+    )
 
-#Module: per_base_qc_plot
+    return layout
+
+
 def module_per_base_qc_plot(args):
-	fastq_df = tabulate_fastq_info(args.fastq, args.encoding, args.num_seqs)
-	show_per_base_qc_plot(fastq_df, None)
+    """
+    Display per-base quality plot
 
-	return None
+    Module: per_base_qc_plot
+    """
+    fastq_df = tabulate_fastq_info(args.fastq, args.encoding, args.num_seqs)
+    show_per_base_qc_plot(fastq_df, None)
 
-#Module: per_base_qc_plot
+
 def tabulate_fastq_info(fastq, encoding, num_seqs):
-	imported_fastq = list(skbio.io.read(fastq, format='fastq', verify=False, variant=encoding))
+    """
+    Store in a dataframe the per-sequence quality information of the FASTQ library
 
-	fastq_df = pd.DataFrame()
+    Module: per_base_qc_plot
+    """
+    imported_fastq = list(skbio.io.read(fastq, format='fastq', verify=False, variant=encoding))
 
-	for count, seq in enumerate(imported_fastq):
-		fastq_df[count] = seq.positional_metadata.quality
+    fastq_df = pd.DataFrame()
 
-		if count==num_seqs-1:
-			break
+    for count, seq in enumerate(imported_fastq):
+        fastq_df[count] = seq.positional_metadata.quality
 
-	fastq_df.index +=1
+        if count == num_seqs - 1:
+            break
 
-	return fastq_df
+    fastq_df.index += 1
 
-#Module: per_base_qc_plot
+    return fastq_df
+
+
 def define_color_scale():
-	col_scales = cl.scales['4']['div']['RdYlGn']
-	col_scales_40 = cl.interp(col_scales, 40)
+    """
+    Define color scale for quality scores
 
-	return col_scales_40
+    Module: per_base_qc_plot
+    """
+    col_scales = cl.scales['4']['div']['RdYlGn']
+    col_scales_40 = cl.interp(col_scales, 40)
 
-#Module: per_base_qc_plot
+    return col_scales_40
+
+
 def create_boxes(fastq_df, col_scales):
-	traces = []
+    """
+    Create boxplots per base position
 
-	for base in range(len(fastq_df)):
-		traces.append(
-			go.Box(
-				#y=fastq_df.iloc[base].values,
-				name="Base Position Quality",
-				x=[base+1],
-				boxpoints=False,
-				whiskerwidth=0.5,
-				marker=dict(
-					size=.1,
-					color=col_scales[int(round(fastq_df.iloc[base].mean(), 0))]
-		        ),
-		        line=dict(width=1),
-				q1=[np.nanpercentile(fastq_df.iloc[base].values, 25)],
-				q3=[np.nanpercentile(fastq_df.iloc[base].values, 75)],
-        		median=[np.nanpercentile(fastq_df.iloc[base].values, 50)],
-        		lowerfence=[np.nanpercentile(fastq_df.iloc[base].values, 10)],
-        		upperfence=[np.nanpercentile(fastq_df.iloc[base].values, 90)],
-        		hoverlabel=dict(
-        			namelength=-1,
-        			align="left"
-        		)
-	        )
-		)
+    Module: per_base_qc_plot
+    """
+    traces = []
 
-	return traces
+    for base in range(len(fastq_df)):
+        traces.append(
+            go.Box(
+                # y=fastq_df.iloc[base].values,
+                name="Base Position Quality",
+                x=[base + 1],
+                boxpoints=False,
+                whiskerwidth=0.5,
+                marker=dict(size=0.1, color=col_scales[int(round(fastq_df.iloc[base].mean(), 0))]),
+                line=dict(width=1),
+                q1=[np.nanpercentile(fastq_df.iloc[base].values, 25)],
+                q3=[np.nanpercentile(fastq_df.iloc[base].values, 75)],
+                median=[np.nanpercentile(fastq_df.iloc[base].values, 50)],
+                lowerfence=[np.nanpercentile(fastq_df.iloc[base].values, 10)],
+                upperfence=[np.nanpercentile(fastq_df.iloc[base].values, 90)],
+                hoverlabel=dict(namelength=-1, align="left"),
+            )
+        )
 
-#Module: per_base_qc_plot
+    return traces
+
+
 def show_per_base_qc_plot(fastq_df, output):
-	col_scales_40 = define_color_scale()
-	traces = create_boxes(fastq_df, col_scales_40)
-	layout = define_layout(
-		"Per-Base Quality Score", 
-		"Base Position", 
-		"Quality Score",
-		[0, 41], #Max possible Q-score = 41
-		False
-	)
+    """
+    Display plot
 
-	fig = go.Figure(data=traces, layout=layout)
-	#fig.update_yaxes(ticksuffix = "    ")
+    Module: per_base_qc_plot
+    """
+    col_scales_40 = define_color_scale()
+    traces = create_boxes(fastq_df, col_scales_40)
+    layout = define_layout(
+        "Per-Base Quality Score", "Base Position", "Quality Score", [0, 41], False  # Max possible Q-score = 41
+    )
 
-	fig.show()
+    fig = go.Figure(data=traces, layout=layout)
+    # fig.update_yaxes(ticksuffix = "    ")
 
-#Module: fastq_stat
+    fig.show()
+
+
 def module_fastq_stat(args):
-	imported_fastq = list(skbio.io.read(args.fastq, format='fastq', verify=False, variant=args.encoding))
+    """
+    Show basic FASTQ library stats
 
-	show_fastq_stat_plots(imported_fastq)
-	#get_gc_content(imported_fastq)
+    Module: fastq_stat
+    """
+    # TODO: `fastq_stat` module is unfinished
+    imported_fastq = list(skbio.io.read(args.fastq, format='fastq', verify=False, variant=args.encoding))
 
-	return None
+    show_fastq_stat_plots(imported_fastq)
+    # get_gc_content(imported_fastq)
 
-#Module: fastq_stat
+
 def show_fastq_stat_plots(fastq):
-	hist_trace = create_seq_length_hist(fastq)
+    """
+    Display distribution of sequence lengths
 
-	fig = go.Figure(data=traces)
+    Module: fastq_stat
+    """
+    hist_trace = create_seq_length_hist(fastq)
 
-	fig.show()
+    fig = go.Figure(data=hist_trace)
+    fig.show()
 
-#Module: fastq_stat
+
 def create_seq_length_hist(fastq):
-	fastq_seq_lengths = [len(seq) for seq in fastq]
+    """
+    Create histogram for sequence length
 
-	hist_trace = go.Histogram(
-		x=fastq_seq_lengths
-	)
+    Module: fastq_stat
+    """
+    # TODO: Probably just merge this with `show_fastq_stat_plots`
+    fastq_seq_lengths = [len(seq) for seq in fastq]
 
-	return hist_trace
+    hist_trace = go.Histogram(x=fastq_seq_lengths)
 
-#Module: fastq_stat
+    return hist_trace
+
+
 def create_gc_content(fastq):
-	concat_seq = ""
+    """
+    Estimate GC content of FASTQ library
 
-	for seq in fastq:
-		concat_seq += str(seq)
+    Module: fastq_stat
+    """
+    # TODO: Unfinished
+    concat_seq = ""
 
-	gc_content = DNA(concat_seq).gc_content()
+    for seq in fastq:
+        concat_seq += str(seq)
 
-#Module: fastq_stat
-def get_num_seqs():
-	len(imported_fastq)
+    gc_content = DNA(concat_seq).gc_content()
+
+    return gc_content
 
 
+def get_num_seqs(fastq):
+    """
+    Get number of sequences in FASTQ library
+
+    Module: fastq_stat
+    """
+    # TODO: Unfinished
+    len(fastq)
 
 
 def main(args):
-	#Ignore pandas warnings
-	simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
-	
-	args.func(args)
+    # Ignore pandas warnings
+    simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
+    args.func(args)
 
 
 if __name__ == "__main__":
-	parent_parser = argparse.ArgumentParser(
-		formatter_class=argparse.RawTextHelpFormatter,
-		description="Inspect FASTQ files interactively",
-		add_help=False
-	)
+    parent_parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawTextHelpFormatter, description="Inspect FASTQ files interactively", add_help=False
+    )
 
-	#Define arguments always required
-	required_args = parent_parser.add_argument_group('Required arguments')
+    # Define arguments always required
+    required_args = parent_parser.add_argument_group('Required arguments')
 
-	required_args.add_argument(
-		"--fastq", 
-		dest="fastq", 
-		type=str,
-		required=True,
-		metavar="STRING",
-		help="Path to FASTQ file"
-	)
+    required_args.add_argument("--fastq", dest="fastq", type=str, required=True, metavar="STRING", help="Path to FASTQ file")
 
-	required_args.add_argument(
-		"--encoding", 
-		dest="encoding", 
-		type=str,
-		required=False,
-		choices=["sanger", "illumina1.3", "illumina1.8", "solexa"],
-		default="illumina1.8",
-		metavar="STRING",
-		help="Encoding system used in FASTQ file. Default: \"illumina1.8\" || Choices: [\"sanger\", \"illumina1.3\", \"illumina1.8\", \"solexa\"]"
-	)
+    required_args.add_argument(
+        "--encoding",
+        dest="encoding",
+        type=str,
+        required=False,
+        choices=["sanger", "illumina1.3", "illumina1.8", "solexa"],
+        default="illumina1.8",
+        metavar="STRING",
+        help="Encoding system used in FASTQ file. Default: \"illumina1.8\" || Choices: [\"sanger\", \"illumina1.3\", \"illumina1.8\", \"solexa\"]",
+    )
 
-	#Define main parser
-	main_parser = argparse.ArgumentParser()
+    # Define main parser
+    main_parser = argparse.ArgumentParser()
 
-	subparser = main_parser.add_subparsers(
-		title="Analysis type",
-		dest="analysis_type",
-		description="Available subcommands"
-	)
+    subparser = main_parser.add_subparsers(title="Analysis type", dest="analysis_type", description="Available subcommands")
 
-	#Parser for per_base_qc_plot module
-	per_base_qc_plot_subparser = subparser.add_parser("per_base_qc_plot", parents=[required_args])
+    # Parser for per_base_qc_plot module
+    per_base_qc_plot_subparser = subparser.add_parser("per_base_qc_plot", parents=[required_args])
 
-	per_base_qc_plot_subparser.add_argument(
-		"--num_seqs", 
-		dest="num_seqs", 
-		type=int,
-		required=False,
-		default=10000,
-		metavar="INTEGER",
-		help="Number of sequences to subsample for per-base QC plot. Default: 10000"
-	)
+    per_base_qc_plot_subparser.add_argument(
+        "--num_seqs",
+        dest="num_seqs",
+        type=int,
+        required=False,
+        default=10000,
+        metavar="INTEGER",
+        help="Number of sequences to subsample for per-base QC plot. Default: 10000",
+    )
 
-	per_base_qc_plot_subparser.set_defaults(func=module_per_base_qc_plot)
+    per_base_qc_plot_subparser.set_defaults(func=module_per_base_qc_plot)
 
-	#Parser for fastq_stat module
-	fastq_stat_subparser = subparser.add_parser("fastq_stat", parents=[required_args])
+    # Parser for fastq_stat module
+    fastq_stat_subparser = subparser.add_parser("fastq_stat", parents=[required_args])
 
-	fastq_stat_subparser.set_defaults(func=module_fastq_stat)
+    fastq_stat_subparser.set_defaults(func=module_fastq_stat)
 
+    args = main_parser.parse_args()
 
-	args = main_parser.parse_args()
-
-	main(args)
+    main(args)

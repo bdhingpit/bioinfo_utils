@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Retrieve pathway names associated with 'ko' or 'map' ids
+
 kos_list=${1}
 kos_w_desc=${2}
 

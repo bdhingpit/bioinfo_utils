@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Retrieve gene names associated with a list of 'KO' ids
+
 kos_list=${1}
 kos_w_desc=${2}
 
